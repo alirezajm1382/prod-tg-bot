@@ -152,7 +152,7 @@ bot.onText("⏲️ Pomodoro Timer", async (msg) => {
     "Pomodoro Timer started! Work for 25 minutes, then take a 5-minute break.",
     {
       reply_markup: {
-        keyboard: [{ text: "😴 Stop Timer", callback_data: "killtimers" }],
+        inline_keyboard: [{ text: "😴 Stop Timer", callback_data: "killtimers" }],
       },
     }
   );
