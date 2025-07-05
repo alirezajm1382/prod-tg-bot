@@ -1,9 +1,11 @@
 {
   "version": 2,
-  "functions": {
-    "api/*.js": {
-      "memory": 128,
-      "maxDuration": 10
+  "public": true,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "api/bot.js"
     }
-  }
+  ],
+  "redirects": [{ "source": "/api", "destination": "/", "permanent": false }]
 }
