@@ -46,7 +46,8 @@ bot.onText(/\/start/, (msg) => {
         {
           parse_mode: "HTML",
           reply_markup: {
-            inline_keyboard: HomeInlineKeyboard,
+            keyboard: HomeInlineKeyboard,
+            resize_keyboard: true,
           },
         }
       );
@@ -61,12 +62,120 @@ bot.onText(/\/start/, (msg) => {
 });
 
 // ================= Callbacks ================= //
+bot.onText("📚 Get Quote", async (msg) => {
+  bot.emit("callback_query", {
+    data: "quote",
+    query: {
+      from: msg.from,
+      message: { chat: msg.chat },
+    },
+  });
+});
+bot.onText("🎯 My Tasks", async (msg) => {
+  let chatId = msg.chat.id;
+  getTasks(msg.from.id)
+    .then((tasks) => {
+      if (tasks.length === 0) {
+        bot.sendMessage(
+          chatId,
+          "<b>You have no tasks!</b> 🎊\n\nEnjoy the free time or add some new to-do items to stay on track. Just tap to add a new task whenever you're ready!",
+          {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [[{ text: "🏠 Home", callback_data: "home" }]],
+            },
+          }
+        );
+      } else {
+        bot.sendMessage(chatId, `<b>Your tasks: (${tasks.length})</b>`, {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: tasks.map((task) => {
+              return [
+                {
+                  text: `${task.is_completed ? "✅" : "☑️"} ${task.content}`,
+                  callback_data: `my_tasks ${task.id}`,
+                },
+              ];
+            }),
+          },
+        });
+      }
+    })
+    .catch((error) => {
+      console.error(
+        `Error fetching tasks for user ${msg.from.username}:`,
+        error
+      );
+      bot.sendMessage(
+        chatId,
+        "There was an error fetching your tasks. Please try again later."
+      );
+    });
+  return;
+});
+bot.onText("📝 Add Task", async (msg) => {
+  bot.sendMessage(msg.chat.id, "Please send me the task you want to add.", {
+    message_thread_id: msg.message_thread_id,
+    reply_markup: {
+      force_reply: true,
+      input_field_placeholder: "Type your task here...",
+    },
+  });
+  bot.once("message", (reply) => {
+    if (reply.text) {
+      addTask(msg.from.id, reply.text)
+        .then((task) => {
+          bot.sendMessage(msg.chat.id, "Task Added Successfully! 🎊");
+          bot.emit("callback_query", {
+            data: `my_tasks`,
+            from: msg.from,
+            message: { chat: msg.chat },
+          });
+        })
+        .catch((error) => {
+          console.error(`Error adding task:`, error);
+          bot.sendMessage(
+            msg.chat.id,
+            "There was an error adding your task. Please try again later."
+          );
+        });
+    } else if (!reply.text && reply.text.trim() === "") {
+      bot.sendMessage(msg.chat.id, "No task provided.");
+    }
+  });
+});
+bot.onText("⏲️ Pomodoro Timer", async (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(
+    chatId,
+    "Pomodoro Timer started! Work for 25 minutes, then take a 5-minute break.",
+    {
+      reply_markup: {
+        keyboard: [{ text: "😴 Stop Timer", callback_data: "killtimers" }],
+      },
+    }
+  );
+  timeout = setTimeout(() => {
+    bot.sendMessage(chatId, "25 minutes are up! Take a 5-minute break.");
+  }, 25 * 60 * 1000);
+});
+bot.onText("☠️ Kill Timers", async (msg) => {
+  clearTimeout(timeout);
+  bot.sendMessage(msg.chat.id, "All timers have been stopped. ✅", {
+    reply_markup: {
+      keyboard: HomeInlineKeyboard,
+    },
+  });
+});
+
 bot.on("callback_query", async (query) => {
   // Home
   if (query.data === "home") {
     bot.sendMessage(query.message.chat.id, "Welcome back to the home menu!", {
       reply_markup: {
-        inline_keyboard: HomeInlineKeyboard,
+        keyboard: HomeInlineKeyboard,
+        resize_keyboard: true,
       },
     });
   }
@@ -77,7 +186,7 @@ bot.on("callback_query", async (query) => {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "🏠", callback_data: "home" },
+            { text: "🏠 Home", callback_data: "home" },
             {
               text: "Get another quote",
               callback_data: "quote",
@@ -85,45 +194,6 @@ bot.on("callback_query", async (query) => {
           ],
         ],
       },
-    });
-  }
-  // Add task
-  else if (query.data === "addtask") {
-    bot.sendMessage(
-      query.message.chat.id,
-      "Please send me the task you want to add.",
-      {
-        message_thread_id: query.message.message_thread_id,
-        reply_markup: {
-          force_reply: true,
-          input_field_placeholder: "Type your task here...",
-        },
-      }
-    );
-    bot.once("message", (reply) => {
-      if (reply.text) {
-        addTask(query.from.id, reply.text)
-          .then((task) => {
-            bot.sendMessage(
-              query.message.chat.id,
-              "Task Added Successfully! 🎊"
-            );
-            bot.emit("callback_query", {
-              data: `my_tasks`,
-              from: query.from,
-              message: { chat: query.message.chat },
-            });
-          })
-          .catch((error) => {
-            console.error(`Error adding task:`, error);
-            bot.sendMessage(
-              query.message.chat.id,
-              "There was an error adding your task. Please try again later."
-            );
-          });
-      } else if (!reply.text && reply.text.trim() === "") {
-        bot.sendMessage(query.message.chat.id, "No task provided.");
-      }
     });
   }
   // My tasks
@@ -173,33 +243,6 @@ bot.on("callback_query", async (query) => {
       });
     return;
   }
-  // Pomodoro timer
-  else if (query.data === "pomodoro") {
-    const chatId = query.message.chat.id;
-    bot.sendMessage(
-      chatId,
-      "Pomodoro Timer started! Work for 25 minutes, then take a 5-minute break.",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "😴 Stop Timer", callback_data: "killtimers" }],
-          ],
-        },
-      }
-    );
-    timeout = setTimeout(() => {
-      bot.sendMessage(chatId, "25 minutes are up! Take a 5-minute break.");
-    }, 25 * 60 * 1000);
-  }
-  // Kill timers
-  else if (query.data === "killtimers") {
-    clearTimeout(timeout);
-    bot.sendMessage(query.message.chat.id, "All timers have been stopped. ✅", {
-      reply_markup: {
-        inline_keyboard: HomeInlineKeyboard,
-      },
-    });
-  }
   // View task item
   else if (query.data.toString().match(/my_tasks\s[A-Za-z0-9]+/)) {
     let id = query.data.toString().split(" ")[1];
@@ -226,8 +269,8 @@ bot.on("callback_query", async (query) => {
                   [
                     {
                       text: task.is_completed
-                        ? "Mark as Undone ☑️"
-                        : "Mark as Done ✅",
+                        ? "☑️ Mark as Undone"
+                        : "✅ Mark as Done",
                       callback_data: `toggle_status ${task.id}`,
                     },
                     {
