@@ -17,6 +17,7 @@ const {
 const { fetchQuote } = require("../lib/quotes");
 
 // Consts and repeatables
+const MESSAGES = require("../lib/messages");
 const { HomeInlineKeyboard } = require("../lib/consts");
 
 // Importing and initializing Telegram bot using token from .env file
@@ -34,30 +35,25 @@ try {
 let timeout;
 
 // Handing start command, when a user sends /start
-// this event is also triggered when the user begins chatting with the bot for the first time
 bot.onText(/\/start/, (msg) => {
   let chatId = msg.chat.id;
   registerUser(msg.from.id, msg.from.username)
     .then(() => {
-      console.log(`User ${msg.from.username} registered successfully.`);
-      bot.sendMessage(
-        chatId,
-        `Welcome to your Productivity Bot!🤖\nThis is the place where you can pass your exams, <b><u>FINALLY!</u></b>🎊 Here are some things you can do: 👇🏽`,
-        {
-          parse_mode: "HTML",
-          reply_markup: {
-            keyboard: HomeInlineKeyboard,
-            resize_keyboard: true,
-          },
-        }
-      );
+      console.log(`[log] User ${msg.from.username} registered successfully.`);
+      bot.sendMessage(chatId, MESSAGES.WELCOME, {
+        parse_mode: "HTML",
+        reply_markup: {
+          keyboard: HomeInlineKeyboard,
+          resize_keyboard: true,
+        },
+      });
     })
     .catch((error) => {
-      console.error(`Error registering user ${msg.from.username}:`, error);
-      bot.sendMessage(
-        chatId,
-        "There was an error registering you. Please try again later."
+      console.error(
+        `[error] Error registering user ${msg.from.username}:`,
+        error
       );
+      bot.sendMessage(chatId, MESSAGES.REGISTER_ERROR);
     });
 });
 
@@ -76,18 +72,14 @@ bot.onText("🎯 My Tasks", async (msg) => {
   getTasks(msg.from.id)
     .then((tasks) => {
       if (tasks.length === 0) {
-        bot.sendMessage(
-          chatId,
-          "<b>You have no tasks!</b> 🎊\n\nEnjoy the free time or add some new to-do items to stay on track. Just tap to add a new task whenever you're ready!",
-          {
-            parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: [[{ text: "🏠 Home", callback_data: "home" }]],
-            },
-          }
-        );
+        bot.sendMessage(chatId, MESSAGES.NO_TASKS, {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [[{ text: "🏠 Home", callback_data: "home" }]],
+          },
+        });
       } else {
-        bot.sendMessage(chatId, `<b>Your tasks: (${tasks.length})</b>`, {
+        bot.sendMessage(chatId, MESSAGES.TASKS_HEADER(tasks.length), {
           parse_mode: "HTML",
           reply_markup: {
             inline_keyboard: tasks.map((task) => {
@@ -104,18 +96,15 @@ bot.onText("🎯 My Tasks", async (msg) => {
     })
     .catch((error) => {
       console.error(
-        `Error fetching tasks for user ${msg.from.username}:`,
+        `[error] Error fetching tasks for user ${msg.from.username}:`,
         error
       );
-      bot.sendMessage(
-        chatId,
-        "There was an error fetching your tasks. Please try again later."
-      );
+      bot.sendMessage(chatId, MESSAGES.FETCH_TASKS_ERROR);
     });
   return;
 });
 bot.onText("📝 Add Task", async (msg) => {
-  bot.sendMessage(msg.chat.id, "Please send me the task you want to add.", {
+  bot.sendMessage(msg.chat.id, MESSAGES.TASK_ADD_PROMPT, {
     message_thread_id: msg.message_thread_id,
     reply_markup: {
       force_reply: true,
@@ -126,7 +115,7 @@ bot.onText("📝 Add Task", async (msg) => {
     if (reply.text) {
       addTask(msg.from.id, reply.text)
         .then((task) => {
-          bot.sendMessage(msg.chat.id, "Task Added Successfully! 🎊");
+          bot.sendMessage(msg.chat.id, MESSAGES.TASK_ADD_SUCCESS);
           bot.emit("callback_query", {
             data: `my_tasks`,
             from: msg.from,
@@ -134,35 +123,28 @@ bot.onText("📝 Add Task", async (msg) => {
           });
         })
         .catch((error) => {
-          console.error(`Error adding task:`, error);
-          bot.sendMessage(
-            msg.chat.id,
-            "There was an error adding your task. Please try again later."
-          );
+          console.error(`[error] Error adding task:`, error);
+          bot.sendMessage(msg.chat.id, MESSAGES.TASK_ADD_ERROR);
         });
     } else if (!reply.text && reply.text.trim() === "") {
-      bot.sendMessage(msg.chat.id, "No task provided.");
+      bot.sendMessage(msg.chat.id, MESSAGES.NO_TASK_PROVIDED);
     }
   });
 });
 bot.onText("⏲️ Pomodoro Timer", async (msg) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(
-    chatId,
-    "Pomodoro Timer started! Work for 25 minutes, then take a 5-minute break.",
-    {
-      reply_markup: {
-        inline_keyboard: [{ text: "😴 Stop Timer", callback_data: "killtimers" }],
-      },
-    }
-  );
+  bot.sendMessage(chatId, MESSAGES.POMODORO_START, {
+    reply_markup: {
+      inline_keyboard: [{ text: "😴 Stop Timer", callback_data: "killtimers" }],
+    },
+  });
   timeout = setTimeout(() => {
-    bot.sendMessage(chatId, "25 minutes are up! Take a 5-minute break.");
+    bot.sendMessage(chatId, MESSAGES.POMODORO_END);
   }, 25 * 60 * 1000);
 });
 bot.onText("☠️ Kill Timers", async (msg) => {
   clearTimeout(timeout);
-  bot.sendMessage(msg.chat.id, "All timers have been stopped. ✅", {
+  bot.sendMessage(msg.chat.id, MESSAGES.KILL_TIMERS, {
     reply_markup: {
       keyboard: HomeInlineKeyboard,
     },
@@ -172,7 +154,7 @@ bot.onText("☠️ Kill Timers", async (msg) => {
 bot.on("callback_query", async (query) => {
   // Home
   if (query.data === "home") {
-    bot.sendMessage(query.message.chat.id, "Welcome back to the home menu!", {
+    bot.sendMessage(query.message.chat.id, MESSAGES.HOME_MENU, {
       reply_markup: {
         keyboard: HomeInlineKeyboard,
         resize_keyboard: true,
@@ -202,21 +184,17 @@ bot.on("callback_query", async (query) => {
     getTasks(query.from.id)
       .then((tasks) => {
         if (tasks.length === 0) {
-          bot.sendMessage(
-            chatId,
-            "<b>You have no tasks!</b> 🎊\n\nEnjoy the free time or add some new to-do items to stay on track. Just tap to add a new task whenever you're ready!",
-            {
-              parse_mode: "HTML",
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "🏠 Home", callback_data: "home" }],
-                  [{ text: "📝 Add Task", callback_data: "addtask" }],
-                ],
-              },
-            }
-          );
+          bot.sendMessage(chatId, MESSAGES.NO_TASKS, {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🏠 Home", callback_data: "home" }],
+                [{ text: "📝 Add Task", callback_data: "addtask" }],
+              ],
+            },
+          });
         } else {
-          bot.sendMessage(chatId, `<b>Your tasks: (${tasks.length})</b>`, {
+          bot.sendMessage(chatId, MESSAGES.TASKS_HEADER(tasks.length), {
             parse_mode: "HTML",
             reply_markup: {
               inline_keyboard: tasks.map((task) => {
@@ -233,13 +211,10 @@ bot.on("callback_query", async (query) => {
       })
       .catch((error) => {
         console.error(
-          `Error fetching tasks for user ${query.from.username}:`,
+          `[error] Error fetching tasks for user ${query.from.username}:`,
           error
         );
-        bot.sendMessage(
-          chatId,
-          "There was an error fetching your tasks. Please try again later."
-        );
+        bot.sendMessage(chatId, MESSAGES.FETCH_TASKS_ERROR);
       });
     return;
   }
@@ -249,19 +224,18 @@ bot.on("callback_query", async (query) => {
     getTaskById(id, query.from.id)
       .then((task) => {
         if (!task) {
-          bot.sendMessage(query.message.chat.id, "Task not found.");
+          bot.sendMessage(query.message.chat.id, MESSAGES.TASK_NOT_FOUND);
         } else {
           let date = new Date(task.created_at);
           bot.sendMessage(
             query.message.chat.id,
-            `<b>Task details:</b>\n\n<b>Title</b>: ${
-              task.content
-            }\n<b>Status</b>: ${
-              task.is_completed ? "Done ✅" : "Undone ☑️"
-            }\n\n<b>Created at:</b>\n${date.toLocaleDateString("fa-IR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}`,
+            MESSAGES.TASK_DETAILS(
+              task,
+              date.toLocaleDateString("fa-IR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            ),
             {
               parse_mode: "HTML",
               reply_markup: {
@@ -289,43 +263,36 @@ bot.on("callback_query", async (query) => {
         }
       })
       .catch((error) => {
-        console.error(`Error fetching task by id:`, error);
-        bot.sendMessage(
-          query.message.chat.id,
-          "There was an error fetching the task. Please try again later."
-        );
+        console.error(`[error] Error fetching task by id:`, error);
+        bot.sendMessage(query.message.chat.id, MESSAGES.FETCH_TASK_ERROR);
       });
   }
   // Delete task item
   else if (query.data.toString().match(/^delete_task\s[A-Za-z0-9]+/)) {
     let id = query.data.toString().split(" ")[1];
-    bot.sendMessage(
-      query.message.chat.id,
-      "Are you sure you want to delete this task? This action cannot be undone.",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "❌ Cancel",
-                callback_data: `my_tasks ${id}`,
-              },
-              {
-                text: "🗑️ Yes, delete",
-                callback_data: `confirm_delete ${id}`,
-              },
-            ],
+    bot.sendMessage(query.message.chat.id, MESSAGES.DELETE_CONFIRM, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "❌ Cancel",
+              callback_data: `my_tasks ${id}`,
+            },
+            {
+              text: "🗑️ Yes, delete",
+              callback_data: `confirm_delete ${id}`,
+            },
           ],
-        },
-      }
-    );
+        ],
+      },
+    });
   }
   // Toggle item status
   else if (query.data.toString().match(/^toggle_status\s[A-Za-z0-9]+/)) {
     let id = query.data.toString().split(" ")[1];
     toggleTaskCompleted(id, query.from.id)
       .then((task) => {
-        bot.sendMessage(query.message.chat.id, "Task status updated.");
+        bot.sendMessage(query.message.chat.id, MESSAGES.TASK_STATUS_UPDATED);
         bot.emit("callback_query", {
           data: `my_tasks ${task.id}`,
           from: query.from,
@@ -333,11 +300,8 @@ bot.on("callback_query", async (query) => {
         });
       })
       .catch((error) => {
-        console.error(`Error toggling task status:`, error);
-        bot.sendMessage(
-          query.message.chat.id,
-          "There was an error updating the task status. Please try again later."
-        );
+        console.error(`[error] Error toggling task status:`, error);
+        bot.sendMessage(query.message.chat.id, MESSAGES.TASK_STATUS_ERROR);
       });
   }
   // Confirm delete task
@@ -345,7 +309,7 @@ bot.on("callback_query", async (query) => {
     let id = query.data.toString().split(" ")[1];
     deleteTask(id, query.from.id)
       .then(() => {
-        bot.sendMessage(query.message.chat.id, "Task deleted successfully.");
+        bot.sendMessage(query.message.chat.id, MESSAGES.TASK_DELETED);
         bot.emit("callback_query", {
           data: "my_tasks",
           from: query.from,
@@ -353,11 +317,8 @@ bot.on("callback_query", async (query) => {
         });
       })
       .catch((error) => {
-        console.error(`Error deleting task:`, error);
-        bot.sendMessage(
-          query.message.chat.id,
-          "There was an error deleting the task. Please try again later."
-        );
+        console.error(`[error] Error deleting task:`, error);
+        bot.sendMessage(query.message.chat.id, MESSAGES.TASK_DELETE_ERROR);
       });
   }
 });
